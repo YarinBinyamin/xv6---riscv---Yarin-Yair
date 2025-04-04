@@ -325,6 +325,58 @@ fork(void)
   return pid;
 }
 
+
+
+int forkn(int n, uint64 *pids){
+  if( n < 1 || n > 16){
+    return -1;
+  }
+  struct proc *p = myproc();
+  int created = 0;
+  int child_pids[16];
+  struct proc *children[16];
+  for(int i=0; i<n; i++){
+    int pid = fork();
+    if(pid<0){
+      for(int j=0; j<created; j++){
+        children[j]->killed = 1;
+      }
+      return -1;
+    }
+    if(pid == 0){
+      return i+1;
+    }
+    else{
+      child_pids[i] = pid;
+      //children[i] = p->children[i];
+      created++;
+    }
+
+  }
+  for(int i=0; i<created; i++){
+    acquire(&children[i]->lock);
+    children[i]->state = RUNNABLE;
+    release(&children[i]->lock);
+
+  }
+  if (copyout(p->pagetable, (uint64) pids, (char *)child_pids, n * sizeof(int)) < 0)
+    return -1;
+
+  return 0;
+}
+  
+
+
+
+
+
+
+
+
+
+
+
+
 // Pass p's abandoned children to init.
 // Caller must hold wait_lock.
 void

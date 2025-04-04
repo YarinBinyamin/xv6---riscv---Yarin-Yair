@@ -101,3 +101,12 @@ sys_memsize(void)
   struct proc *p = myproc();
   return p->sz;  
 }
+
+uint64
+sys_forkn(void){
+  int n;
+  int *pids;
+  argint(0, &n);
+  argaddr(1, &pids);
+  return forkn(n, pids);
+}
