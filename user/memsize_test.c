@@ -9,5 +9,5 @@
 
     free(ptr);
     printf("After free: %d bytes\n", memsize());
-    exit(0);
+    exit(0,"");
     }
