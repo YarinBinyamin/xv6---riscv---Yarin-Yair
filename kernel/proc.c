@@ -327,8 +327,41 @@ fork(void)
 
 
 
+// int
+// forkn(int n, int *pids)
+// {
+//   if (n < 1 || n > 16)
+//     return -1;
+
+//   struct proc *p = myproc();
+//   int created = 0;
+//   int child_pids[16];
+
+//   for (int i = 0; i < n; i++) {
+//     int pid = fork();
+//     if (pid < 0) {
+//       // Kill already created children
+//       for (int j = 0; j < created; j++) {
+//         kill(child_pids[j]);
+//       }
+//       return -1;
+//     }
+//     if (pid == 0) {
+//       return i + 1;  // Child returns i+1
+//     } else {
+//       child_pids[i] = pid;
+//       created++;
+//     }
+//   }
+
+//   // Copy array of child PIDs back to user space
+//   if (copyout(p->pagetable, (uint64)pids, (char *)child_pids, n * sizeof(int)) < 0)
+//     return -1;
+
+//   return 0;
+// }
 int
-forkn(int n, int *pids)
+forkn(int n, uint64 pids_addr)
 {
   if (n < 1 || n > 16)
     return -1;
@@ -338,28 +371,63 @@ forkn(int n, int *pids)
   int child_pids[16];
 
   for (int i = 0; i < n; i++) {
-    int pid = fork();
-    if (pid < 0) {
-      // Kill already created children
+    struct proc *np = allocproc();
+    if (np == 0) {
+      // ביטול כל הילדים שנוצרו עד כה
       for (int j = 0; j < created; j++) {
         kill(child_pids[j]);
       }
       return -1;
     }
-    if (pid == 0) {
-      return i + 1;  // Child returns i+1
-    } else {
-      child_pids[i] = pid;
-      created++;
+
+    // Copy user memory from parent to child.
+    if (uvmcopy(p->pagetable, np->pagetable, p->sz) < 0) {
+      freeproc(np);
+      release(&np->lock);
+      for (int j = 0; j < created; j++) {
+        kill(child_pids[j]);
+      }
+      return -1;
     }
+    np->sz = p->sz;
+
+    // copy saved user registers.
+    *(np->trapframe) = *(p->trapframe);
+
+    // Cause forkn to return i+1 in the child.
+    np->trapframe->a0 = i + 1;
+
+    for (int fd = 0; fd < NOFILE; fd++) {
+      if (p->ofile[fd])
+        np->ofile[fd] = filedup(p->ofile[fd]);
+    }
+    np->cwd = idup(p->cwd);
+    safestrcpy(np->name, p->name, sizeof(p->name));
+
+    acquire(&wait_lock);
+    np->parent = p;
+    release(&wait_lock);
+
+    int pid = np->pid;
+    child_pids[created++] = pid;
+
+    np->state = RUNNABLE;
+    release(&np->lock);
+
+    printf("Created child %d with pid %d\n", i + 1,np->pid);
   }
 
-  // Copy array of child PIDs back to user space
-  if (copyout(p->pagetable, (uint64)pids, (char *)child_pids, n * sizeof(int)) < 0)
+  if (copyout(p->pagetable, pids_addr, (char *)child_pids, n * sizeof(int)) < 0) {
     return -1;
+  }
 
-  return 0;
+ return 0;
 }
+
+
+
+
+
 
 
 
@@ -367,20 +435,24 @@ forkn(int n, int *pids)
 int waitall(int* n, int* statuses) {
   struct proc *p = myproc();
   struct proc *pp;
-  int local_statuses[16];
-  int count = 0;
-  int havekids = 0;
-
+  int local_statuses[NPROC];
+  
   acquire(&wait_lock);
 
+  int place = 0;
+  for(;;){
+    int havekids = 0;
+    int count_zombies = 0;
   for (pp = proc; pp < &proc[NPROC]; pp++) {
     if (pp->parent == p) {
       havekids++;
       acquire(&pp->lock);
       if (pp->state == ZOMBIE) {
-        if (count < 16)
-        local_statuses[count++] = pp->xstate;
-        freeproc(pp);
+        count_zombies++;
+        if (place < 16){
+          local_statuses[place++] = pp->xstate;
+        }
+          freeproc(pp);
       }
       release(&pp->lock);
     }
@@ -394,24 +466,26 @@ int waitall(int* n, int* statuses) {
     return 0;
   }
 
-  // אם מספר הילדים שמתו קטן ממספר הילדים שיש — נחכה
-  if (count < havekids) {
+  if (count_zombies == havekids) {
+    if (copyout(p->pagetable, (uint64)statuses, (char*)local_statuses, place * sizeof(int)) < 0) {
+      release(&wait_lock);
+      return -1;
+    }
+
+    if (copyout(p->pagetable, (uint64)n, (char*)&place, sizeof(int)) < 0) {
+      release(&wait_lock);
+      return -1;
+    }
+    release(&wait_lock);
+  //  printf("Place: %d\n", place);
+    return 0;
+  }
+  else{
+  
     sleep(p, &wait_lock);
-    return waitall(n, statuses);
   }
 
-  // כל הילדים מתו
-  if (copyout(p->pagetable, (uint64)statuses, (char*)local_statuses, count * sizeof(int)) < 0) {
-    release(&wait_lock);
-    return -1;
-  }
-  if (copyout(p->pagetable, (uint64)n, (char*)&count, sizeof(int)) < 0) {
-    release(&wait_lock);
-    return -1;
-  }
-
-  release(&wait_lock);
- return 0;
+} 
 }
 
 

@@ -137,6 +137,7 @@ UPROGS=\
 	$U/_goodbye\
 	$U/_forkn_test\
 	$U/_waitall_test\
+	$U/_bigarray\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)

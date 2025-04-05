@@ -108,7 +108,7 @@ sys_forkn(void){
   uint64 pids;
   argint(0, &n);
   argaddr(1, &pids);
-  return forkn(n,(int *) pids);
+  return forkn(n, pids);
 }
 
 uint64
