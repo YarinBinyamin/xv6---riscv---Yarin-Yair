@@ -105,8 +105,17 @@ sys_memsize(void)
 uint64
 sys_forkn(void){
   int n;
-  int *pids;
+  uint64 pids;
   argint(0, &n);
   argaddr(1, &pids);
-  return forkn(n, pids);
+  return forkn(n,(int *) pids);
+}
+
+uint64
+sys_waitall(void){
+  uint64 n_addr, statuses_addr;
+  argaddr(0, &n_addr);
+  argaddr(1, &statuses_addr);
+  return waitall((int*)n_addr, (int*)statuses_addr);
+
 }

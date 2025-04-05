@@ -327,44 +327,98 @@ fork(void)
 
 
 
-int forkn(int n, uint64 *pids){
-  if( n < 1 || n > 16){
+int
+forkn(int n, int *pids)
+{
+  if (n < 1 || n > 16)
     return -1;
-  }
+
   struct proc *p = myproc();
   int created = 0;
   int child_pids[16];
-  struct proc *children[16];
-  for(int i=0; i<n; i++){
+
+  for (int i = 0; i < n; i++) {
     int pid = fork();
-    if(pid<0){
-      for(int j=0; j<created; j++){
-        children[j]->killed = 1;
+    if (pid < 0) {
+      // Kill already created children
+      for (int j = 0; j < created; j++) {
+        kill(child_pids[j]);
       }
       return -1;
     }
-    if(pid == 0){
-      return i+1;
-    }
-    else{
+    if (pid == 0) {
+      return i + 1;  // Child returns i+1
+    } else {
       child_pids[i] = pid;
-      //children[i] = p->children[i];
       created++;
     }
-
   }
-  for(int i=0; i<created; i++){
-    acquire(&children[i]->lock);
-    children[i]->state = RUNNABLE;
-    release(&children[i]->lock);
 
-  }
-  if (copyout(p->pagetable, (uint64) pids, (char *)child_pids, n * sizeof(int)) < 0)
+  // Copy array of child PIDs back to user space
+  if (copyout(p->pagetable, (uint64)pids, (char *)child_pids, n * sizeof(int)) < 0)
     return -1;
 
   return 0;
 }
-  
+
+
+
+
+int waitall(int* n, int* statuses) {
+  struct proc *p = myproc();
+  struct proc *pp;
+  int local_statuses[16];
+  int count = 0;
+  int havekids = 0;
+
+  acquire(&wait_lock);
+
+  for (pp = proc; pp < &proc[NPROC]; pp++) {
+    if (pp->parent == p) {
+      havekids++;
+      acquire(&pp->lock);
+      if (pp->state == ZOMBIE) {
+        if (count < 16)
+        local_statuses[count++] = pp->xstate;
+        freeproc(pp);
+      }
+      release(&pp->lock);
+    }
+  }
+
+  if (havekids == 0) {
+    release(&wait_lock);
+    int zero = 0;
+    if (copyout(p->pagetable, (uint64) n, (char*)&zero, sizeof(int)) < 0)
+      return -1;
+    return 0;
+  }
+
+  // אם מספר הילדים שמתו קטן ממספר הילדים שיש — נחכה
+  if (count < havekids) {
+    sleep(p, &wait_lock);
+    return waitall(n, statuses);
+  }
+
+  // כל הילדים מתו
+  if (copyout(p->pagetable, (uint64)statuses, (char*)local_statuses, count * sizeof(int)) < 0) {
+    release(&wait_lock);
+    return -1;
+  }
+  if (copyout(p->pagetable, (uint64)n, (char*)&count, sizeof(int)) < 0) {
+    release(&wait_lock);
+    return -1;
+  }
+
+  release(&wait_lock);
+ return 0;
+}
+
+
+
+
+
+
 
 
 
