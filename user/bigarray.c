@@ -12,12 +12,11 @@ int main() {
   int statuses[CHILDREN];
   int n;
 
-  // הכנה - מילוי המערך
+
   for (int i = 0; i < TOTAL_SIZE; i++) {
-    arr[i] = i; // אפשר גם arr[i] = i; אם אתה רוצה סכום שונה
+    arr[i] = i; 
   }
   printf("Array initialized with %d elements.\n", TOTAL_SIZE);
-  // יצירת תהליכי בן
   int res = forkn(CHILDREN, pids);
   printf("forkn returned %d\n", res);
   if (res < 0) {
@@ -28,7 +27,7 @@ int main() {
   printf("forkn succeeded\n");
 
   if (res > 0) {
-    // תהליך בן
+   
     int start = (res - 1) * CHUNK_SIZE;
     int end = res * CHUNK_SIZE;
     int sum = 0;
@@ -40,7 +39,7 @@ int main() {
     exit(sum, "child done");
   }
 
-  // תהליך אב
+
   if (waitall(&n, statuses) < 0) {
     printf("waitall failed\n");
     exit(-1, "waitall failed");
@@ -51,6 +50,6 @@ int main() {
     total += statuses[i];
   }
 
-  printf("Total sum is: %d\n", total); // אמור להיות 65536 אם arr[i] = 1
+  printf("Total sum is: %d\n", total); 
   exit(0, "done");
 }
