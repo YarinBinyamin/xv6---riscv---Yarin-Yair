@@ -1,3 +1,4 @@
+
 #include "kernel/types.h"
 #include "kernel/stat.h"
 #include "user/user.h"
@@ -12,33 +13,34 @@ int main() {
   int statuses[CHILDREN];
   int n;
 
-
   for (int i = 0; i < TOTAL_SIZE; i++) {
     arr[i] = i; 
   }
   printf("Array initialized with %d elements.\n", TOTAL_SIZE);
+
   int res = forkn(CHILDREN, pids);
   printf("forkn returned %d\n", res);
   if (res < 0) {
     printf("forkn failed\n");
     exit(-1, "forkn failed");
   }
-
   printf("forkn succeeded\n");
 
   if (res > 0) {
-   
     int start = (res - 1) * CHUNK_SIZE;
     int end = res * CHUNK_SIZE;
-    int sum = 0;
 
+    if (res == CHILDREN) {
+      end = TOTAL_SIZE;
+    }
+
+    int sum = 0;
     for (int i = start; i < end; i++) {
       sum += arr[i];
     }
 
     exit(sum, "child done");
   }
-
 
   if (waitall(&n, statuses) < 0) {
     printf("waitall failed\n");
